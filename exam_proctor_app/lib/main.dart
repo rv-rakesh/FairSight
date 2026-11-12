@@ -47,7 +47,7 @@ class ExamProctorApp extends StatelessWidget {
             letterSpacing: -0.3,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: Colors.white,
           surfaceTintColor: Colors.transparent,
           elevation: 0,

@@ -1,0 +1,42 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\vivek\AppData\Local\Programs\Python\Python311\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\vivek\.gemini\antigravity\scratch\fairsight_src\malpractice_detector
+plugins: anyio-4.15.1
+collecting ... collected 33 items
+
+tests/test_config.py::test_sampling_rate PASSED                          [  3%]
+tests/test_config.py::test_head_pose_thresholds PASSED                   [  6%]
+tests/test_config.py::test_eye_gaze_thresholds PASSED                    [  9%]
+tests/test_config.py::test_event_weights PASSED                          [ 12%]
+tests/test_config.py::test_duration_gates PASSED                         [ 15%]
+tests/test_config.py::test_frequency_rule PASSED                         [ 18%]
+tests/test_config.py::test_immediate_event_types PASSED                  [ 21%]
+tests/test_config.py::test_risk_bands PASSED                             [ 24%]
+tests/test_config.py::test_time_normalization_config PASSED              [ 27%]
+tests/test_multi_person_detection.py::test_detector_initialization_and_keys SKIPPED [ 30%]
+tests/test_multi_person_detection.py::test_draw_annotations_with_auxiliary_persons PASSED [ 33%]
+tests/test_multi_person_detection.py::test_multi_person_on_test_frame_if_available PASSED [ 36%]
+tests/test_multi_person_detection.py::test_duplicate_mesh_face_suppression_on_single_candidate PASSED [ 39%]
+tests/test_multi_person_detection.py::test_candidate_hand_and_chest_proposal_suppression PASSED [ 42%]
+tests/test_multi_person_detection.py::test_intruder_hand_vs_self_hand PASSED [ 45%]
+tests/test_scenarios.py::test_all_scenarios_run PASSED                   [ 48%]
+tests/test_scenarios.py::test_honest_candidate_clean PASSED              [ 51%]
+tests/test_scenarios.py::test_screen_peeking_medium_high PASSED          [ 54%]
+tests/test_scenarios.py::test_unauthorized_person_high PASSED            [ 57%]
+tests/test_scoring.py::test_sustained_duration_guard PASSED              [ 60%]
+tests/test_scoring.py::test_sustained_duration_confirmed PASSED          [ 63%]
+tests/test_scoring.py::test_frequency_pattern_layer PASSED               [ 66%]
+tests/test_scoring.py::test_immediate_multiple_faces PASSED              [ 69%]
+tests/test_scoring.py::test_rescore_telemetry PASSED                     [ 72%]
+tests/test_scoring.py::test_gaze_head_decoupling_prevents_double_counting PASSED [ 75%]
+tests/test_scoring.py::test_risk_level_calibration PASSED                [ 78%]
+tests/test_time_normalisation.py::test_short_clip_vs_3hour_honest_session PASSED [ 81%]
+tests/test_time_normalisation.py::test_cheating_in_single_window_escalates PASSED [ 84%]
+tests/test_time_normalisation.py::test_per_type_window_caps_enforced PASSED [ 87%]
+tests/test_time_normalisation.py::test_frequency_rule_2_vs_3_behavior PASSED [ 90%]
+tests/test_time_normalisation.py::test_multi_face_consecutive_frames_guard PASSED [ 93%]
+tests/test_time_normalisation.py::test_multi_face_timestamp_gap_and_consecutive_integrity PASSED [ 96%]
+tests/test_time_normalisation.py::test_rescore_telemetry_returns_normalized_fields PASSED [100%]
+
+======================== 32 passed, 1 skipped in 5.22s ========================

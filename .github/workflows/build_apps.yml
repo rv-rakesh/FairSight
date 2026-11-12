@@ -1,0 +1,86 @@
+name: Build FairSight Cross-Platform Apps (Windows EXE & Android APK)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Allows manual trigger with 1 click
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Ensure Platform Scaffolding
+        working-directory: exam_proctor_app
+        run: flutter create --platforms=android .
+
+      - name: Get Dependencies
+        working-directory: exam_proctor_app
+        run: flutter pub get
+
+      - name: Run Unit Tests
+        working-directory: exam_proctor_app
+        run: flutter test
+
+      - name: Build Release APK
+        working-directory: exam_proctor_app
+        run: flutter build apk --release
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FairSight-Android-APK
+          path: exam_proctor_app/build/app/outputs/flutter-apk/app-release.apk
+
+  build-windows:
+    name: Build Windows Desktop EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Ensure Platform Scaffolding
+        working-directory: exam_proctor_app
+        run: flutter create --platforms=windows .
+
+      - name: Get Dependencies
+        working-directory: exam_proctor_app
+        run: flutter pub get
+
+      - name: Build Windows Executable
+        working-directory: exam_proctor_app
+        run: flutter build windows --release
+
+      - name: Package Windows Release Archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path exam_proctor_app/build/windows/bundle
+          Compress-Archive -Path exam_proctor_app/build/windows/x64/runner/Release/* -DestinationPath exam_proctor_app/build/windows/bundle/FairSight-Windows-x64.zip -Force
+
+      - name: Upload Zipped Windows Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: FairSight-Windows-Desktop
+          path: exam_proctor_app/build/windows/bundle/FairSight-Windows-x64.zip

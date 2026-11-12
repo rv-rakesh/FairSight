@@ -1,0 +1,109 @@
+# ==============================================================================
+# FairSight — Unified .gitignore (Python / FastAPI / Streamlit + Flutter / Dart)
+# ==============================================================================
+
+# --- Python & Virtual Environments ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+.installed.cfg
+*.egg
+dist/
+*.manifest
+*.spec
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+
+# --- Flutter / Dart ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+**/build/
+**/ios/Flutter/.last_build_id
+**/macos/Flutter/ephemeral/
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+
+# --- Android & Gradle ---
+**/android/.gradle/
+**/android/local.properties
+**/android/captures/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/gradle/wrapper/gradle-wrapper.jar
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# --- Windows CMake / Visual Studio Build Artifacts ---
+**/build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.obj
+.vs/
+
+# --- Secrets, Keys & Private Credentials ---
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+key.properties
+google-services.json
+.streamlit/secrets.toml
+secrets.*
+
+# --- Private Datasets, Videos & Temporary Outputs ---
+outputs/
+test_videos/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+*.tmp
+*.temp
+*.log
+~$*
+
+# --- IDE & OS Metadata ---
+.vscode/
+.idea/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

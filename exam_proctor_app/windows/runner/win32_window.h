@@ -26,26 +26,20 @@ class Win32Window {
   virtual ~Win32Window();
 
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
-
-  void Show();
-
+  bool Show();
   void Destroy();
-
-  HWND GetHandle() const;
-
+  void SetChildContent(HWND content);
+  HWND GetHandle();
   void SetQuitOnClose(bool quit_on_close);
-
-  RECT GetClientArea() const;
+  RECT GetClientArea();
 
  protected:
-  virtual bool OnCreate();
-
-  virtual void OnDestroy();
-
   virtual LRESULT MessageHandler(HWND window,
                                  UINT const message,
                                  WPARAM const wparam,
                                  LPARAM const lparam) noexcept;
+  virtual bool OnCreate();
+  virtual void OnDestroy();
 
  private:
   friend class WindowClassRegistrar;
@@ -54,15 +48,11 @@ class Win32Window {
                                   UINT const message,
                                   WPARAM const wparam,
                                   LPARAM const lparam) noexcept;
-
   static Win32Window* GetThisFromHandle(HWND const window) noexcept;
-
-  static void RegisterWindowClass();
+  static void UpdateTheme(HWND const window);
 
   bool quit_on_close_ = false;
-
   HWND window_handle_ = nullptr;
-
   HWND child_content_ = nullptr;
 };
 

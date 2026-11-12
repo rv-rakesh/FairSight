@@ -1,18 +1,20 @@
 """
 validate_flutter_project.py
 ===========================
-Automated verification tool for FairSight WP4 (Buildable App).
-Checks that all Android, Windows, Dart, and CI/CD assets conform to
-the specifications of the Master Project and Handoff Document.
+Automated verification tool for FairSight WP4 + CI/CD (Buildable App).
+Checks that all Android, Windows, Dart, and root-level CI/CD assets conform
+to Flutter stable build requirements and repository standards.
 """
 
 import os
 import sys
 
-FLUTTER_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "exam_proctor_app"))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+FLUTTER_ROOT = os.path.join(REPO_ROOT, "exam_proctor_app")
 
-def check_file(rel_path, required_strings=None):
-    full_path = os.path.join(FLUTTER_ROOT, rel_path)
+
+def check_file(base_dir, rel_path, required_strings=None):
+    full_path = os.path.join(base_dir, rel_path)
     if not os.path.isfile(full_path):
         return False, f"Missing file: {rel_path}"
     if required_strings:
@@ -23,54 +25,61 @@ def check_file(rel_path, required_strings=None):
                 return False, f"File {rel_path} missing required text: '{s}'"
     return True, f"OK: {rel_path}"
 
+
 def run_checks():
     print("=" * 70)
-    print("FAIRSIGHT WP4: FLUTTER APP STRUCTURE & PLATFORM INTEGRITY AUDIT")
+    print("FAIRSIGHT: FLUTTER APP STRUCTURE, PLATFORM & CI/CD INTEGRITY AUDIT")
     print("=" * 70)
-    print(f"Auditing path: {FLUTTER_ROOT}\n")
+    print(f"Auditing Flutter root: {FLUTTER_ROOT}\n")
 
     checks = [
         # Android Platform Scaffolding
-        ("android/build.gradle", ["allprojects", "tasks.register(\"clean\""]),
-        ("android/settings.gradle", ["pluginManagement", "dev.flutter.flutter-plugin-loader", "include \":app\""]),
-        ("android/gradle.properties", ["android.useAndroidX=true"]),
-        ("android/gradle/wrapper/gradle-wrapper.properties", ["gradle-8.4-all.zip"]),
-        ("android/app/build.gradle", ["namespace \"org.fairsight.exam_proctor\"", "compileSdk 34", "minSdkVersion 21", "applicationId \"org.fairsight.exam_proctor\""]),
-        ("android/app/src/main/AndroidManifest.xml", ["package=\"org.fairsight.exam_proctor\"", "android:label=\"FairSight\""]),
-        ("android/app/src/main/kotlin/org/fairsight/exam_proctor/MainActivity.kt", ["package org.fairsight.exam_proctor", "class MainActivity"]),
-        ("android/app/src/main/res/values/styles.xml", ["LaunchTheme", "NormalTheme"]),
-        ("android/app/src/main/res/drawable/launch_background.xml", ["layer-list"]),
+        (FLUTTER_ROOT, "android/build.gradle", ["allprojects", "tasks.register(\"clean\""]),
+        (FLUTTER_ROOT, "android/settings.gradle", ["pluginManagement", "dev.flutter.flutter-plugin-loader", "include \":app\""]),
+        (FLUTTER_ROOT, "android/gradle.properties", ["android.useAndroidX=true"]),
+        (FLUTTER_ROOT, "android/gradle/wrapper/gradle-wrapper.properties", ["gradle-8.4-all.zip"]),
+        (FLUTTER_ROOT, "android/app/build.gradle", ["namespace \"org.fairsight.exam_proctor\"", "compileSdk 34", "minSdkVersion 21", "applicationId \"org.fairsight.exam_proctor\""]),
+        (FLUTTER_ROOT, "android/app/src/main/AndroidManifest.xml", ["package=\"org.fairsight.exam_proctor\"", "android:label=\"FairSight\""]),
+        (FLUTTER_ROOT, "android/app/src/main/kotlin/org/fairsight/exam_proctor/MainActivity.kt", ["package org.fairsight.exam_proctor", "class MainActivity"]),
+        (FLUTTER_ROOT, "android/app/src/main/res/values/styles.xml", ["LaunchTheme", "NormalTheme"]),
+        (FLUTTER_ROOT, "android/app/src/main/res/drawable/launch_background.xml", ["layer-list"]),
+        (FLUTTER_ROOT, "android/app/src/main/res/mipmap-mdpi/ic_launcher.png", None),
+        (FLUTTER_ROOT, "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png", None),
 
         # Windows Platform Scaffolding
-        ("windows/CMakeLists.txt", ["cmake_minimum_required", "set(BINARY_NAME \"FairSight\")"]),
-        ("windows/runner/CMakeLists.txt", ["add_executable(${BINARY_NAME} WIN32", "flutter_window.cpp"]),
-        ("windows/runner/main.cpp", ["wWinMain", "FairSight — AI-Based Behavioral Integrity Platform"]),
-        ("windows/runner/flutter_window.h", ["class FlutterWindow : public Win32Window"]),
-        ("windows/runner/flutter_window.cpp", ["FlutterViewController"]),
-        ("windows/runner/win32_window.h", ["class Win32Window"]),
-        ("windows/runner/win32_window.cpp", ["kWindowClassName"]),
-        ("windows/runner/utils.h", ["GetCommandLineArguments"]),
-        ("windows/runner/utils.cpp", ["Utf8FromUtf16"]),
-        ("windows/runner/resource.h", ["IDI_APP_ICON"]),
-        ("windows/runner/Runner.rc", ["FairSight.exe", "FairSight Organization"]),
-        ("windows/runner/runner.exe.manifest", ["PerMonitorV2"]),
+        (FLUTTER_ROOT, "windows/CMakeLists.txt", ["APPLY_STANDARD_SETTINGS", "FLUTTER_MANAGED_DIR", "set(BINARY_NAME \"FairSight\")", "INSTALL_BUNDLE_DATA_DIR"]),
+        (FLUTTER_ROOT, "windows/flutter/CMakeLists.txt", ["generated_config.cmake", "flutter_wrapper_app", "flutter_assemble"]),
+        (FLUTTER_ROOT, "windows/runner/CMakeLists.txt", ["apply_standard_settings(${BINARY_NAME})", "generated_plugin_registrant.cc", "runner.exe.manifest"]),
+        (FLUTTER_ROOT, "windows/runner/main.cpp", ["wWinMain", "FairSight - AI-Based Behavioral Integrity Platform"]),
+        (FLUTTER_ROOT, "windows/runner/flutter_window.h", ["class FlutterWindow : public Win32Window"]),
+        (FLUTTER_ROOT, "windows/runner/flutter_window.cpp", ["generated_plugin_registrant.h", "RegisterPlugins", "SetChildContent", "SetNextFrameCallback"]),
+        (FLUTTER_ROOT, "windows/runner/win32_window.h", ["class Win32Window", "SetChildContent", "bool Show()"]),
+        (FLUTTER_ROOT, "windows/runner/win32_window.cpp", ["WindowClassRegistrar", "SetChildContent", "UpdateTheme"]),
+        (FLUTTER_ROOT, "windows/runner/utils.h", ["GetCommandLineArguments"]),
+        (FLUTTER_ROOT, "windows/runner/utils.cpp", ["Utf8FromUtf16"]),
+        (FLUTTER_ROOT, "windows/runner/resource.h", ["IDI_APP_ICON"]),
+        (FLUTTER_ROOT, "windows/runner/Runner.rc", ["FairSight.exe", "FairSight Organization", "app_icon.ico"]),
+        (FLUTTER_ROOT, "windows/runner/resources/app_icon.ico", None),
+        (FLUTTER_ROOT, "windows/runner/runner.exe.manifest", ["PerMonitorV2"]),
 
-        # Dart Application Logic & Theme
-        ("pubspec.yaml", ["name: exam_proctor_app", "flutter:", "sdk: flutter"]),
-        ("lib/main.dart", ["title: 'FairSight'", "fontFamilyFallback", "useMaterial3: true"]),
-        ("lib/models/telemetry_model.dart", ["class TelemetryResult", "class ExamAuditReport", "normalizedScore", "normalizedRiskLevel"]),
-        ("lib/services/api_service.dart", ["class ApiService", "defaultLocalhost", "defaultEmulator"]),
-        ("test/telemetry_model_test.dart", ["Telemetry Model Unit Tests", "ExamAuditReport parses dual score"]),
+        # Dart Application Logic, Theme & Tests
+        (FLUTTER_ROOT, "pubspec.yaml", ["name: exam_proctor_app", "flutter:", "sdk: flutter"]),
+        (FLUTTER_ROOT, "lib/main.dart", ["title: 'FairSight'", "CardThemeData(", "fontFamilyFallback", "useMaterial3: true"]),
+        (FLUTTER_ROOT, "lib/models/telemetry_model.dart", ["class TelemetryResult", "class ExamAuditReport", "normalizedScore", "normalizedRiskLevel"]),
+        (FLUTTER_ROOT, "lib/services/api_service.dart", ["class ApiService", "defaultLocalhost", "defaultEmulator"]),
+        (FLUTTER_ROOT, "test/telemetry_model_test.dart", ["Telemetry Model Unit Tests", "ExamAuditReport parses dual score"]),
+        (FLUTTER_ROOT, "test/widget_test.dart", ["ExamProctorApp", "Exam Proctor AI"]),
 
-        # CI/CD Workflow
-        (".github/workflows/build_apps.yml", ["flutter create --platforms=android .", "flutter create --platforms=windows .", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
+        # Root-Level Repository Hygiene & CI/CD Workflow
+        (REPO_ROOT, ".gitignore", ["__pycache__/", "**/windows/flutter/ephemeral/"]),
+        (REPO_ROOT, ".github/workflows/build_apps.yml", ["flutter analyze", "flutter test", "flutter build apk --release", "flutter build windows --release", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
     ]
 
     passed = 0
     failed = 0
 
-    for path, req_strings in checks:
-        ok, msg = check_file(path, req_strings)
+    for base_dir, path, req_strings in checks:
+        ok, msg = check_file(base_dir, path, req_strings)
         if ok:
             print(f"  [PASS] {path}")
             passed += 1
@@ -78,25 +87,31 @@ def run_checks():
             print(f"  [FAIL] {msg}")
             failed += 1
 
-    # Verify YAML files structure
-    yaml_files = ["pubspec.yaml", ".github/workflows/build_apps.yml"]
-    for yf in yaml_files:
-        full_path = os.path.join(FLUTTER_ROOT, yf)
-        try:
-            with open(full_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            assert len(lines) > 5, "File too short"
-            print(f"  [PASS] File structure verified: {yf} ({len(lines)} lines)")
-            passed += 1
-        except Exception as e:
-            print(f"  [FAIL] Error reading {yf}: {e}")
-            failed += 1
+    # Ensure duplicate nested workflow does NOT exist
+    nested_wf = os.path.join(FLUTTER_ROOT, ".github", "workflows", "build_apps.yml")
+    if os.path.exists(nested_wf):
+        print(f"  [FAIL] Duplicate nested workflow still exists: exam_proctor_app/.github/workflows/build_apps.yml")
+        failed += 1
+    else:
+        print("  [PASS] No duplicate nested workflow in exam_proctor_app/.github")
+        passed += 1
+
+    # Verify runner.exe.manifest is NOT blocked by .gitignore
+    with open(os.path.join(REPO_ROOT, ".gitignore"), "r", encoding="utf-8") as f:
+        gi_lines = [line.strip() for line in f.read().splitlines()]
+    if "*.manifest" in gi_lines:
+        print("  [FAIL] .gitignore still blocks *.manifest (breaks runner.exe.manifest tracking)")
+        failed += 1
+    else:
+        print("  [PASS] .gitignore allows runner.exe.manifest tracking")
+        passed += 1
 
     print("\n" + "-" * 70)
     print(f"Audit Summary: {passed} PASSED, {failed} FAILED.")
     print("=" * 70)
 
     return failed == 0
+
 
 if __name__ == "__main__":
     success = run_checks()

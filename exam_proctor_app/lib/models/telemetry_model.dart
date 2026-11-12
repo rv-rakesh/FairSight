@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 class TelemetryResult {
   final int faceCount;
   final int personCount;

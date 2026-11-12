@@ -164,6 +164,12 @@ class _LiveProctorScreenState extends State<LiveProctorScreen> {
 
     if (mounted) {
       Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to finalize session. Verify FastAPI backend connection.'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
       Navigator.pop(context);
     }
   }

@@ -341,7 +341,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(Icons.info_outline, color: Color(0xFF2563EB), size: 18),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'The AI pipeline samples 4 frames per second, ensuring brief glances (700ms) and accomplice reaching hands are reliably caught without skipping.',

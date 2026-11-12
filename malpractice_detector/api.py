@@ -68,8 +68,9 @@ _active_sessions: Dict[str, Dict[str, Any]] = {}
 
 @app.get("/health")
 def health_check():
-    model_exists = os.path.exists("models/face_landmarker.task")
-    hand_exists = os.path.exists("models/hand_landmarker.task")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_exists = os.path.exists(os.path.join(base_dir, "models", "face_landmarker.task"))
+    hand_exists = os.path.exists(os.path.join(base_dir, "models", "hand_landmarker.task"))
     return {
         "status": "healthy",
         "version": "2.1.0",

@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Configure the AI proctoring backend IP.\n• Laptop PC: http://127.0.0.1:8000\n• Mobile Wi-Fi: http://192.168.1.8:8000',
+              'Configure the AI proctoring backend IP.\n• Laptop PC: http://127.0.0.1:8000\n• Mobile Wi-Fi: http://<PC-LAN-IP>:8000',
               style: TextStyle(fontSize: 12.5, color: Color(0xFF64748B), height: 1.4),
             ),
             const SizedBox(height: 14),
@@ -469,6 +469,13 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => ReportScreen(report: report)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Backend unreachable. Start the FastAPI server or check Server Settings.'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
         );
       }
     }

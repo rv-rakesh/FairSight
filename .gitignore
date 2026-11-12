@@ -17,7 +17,6 @@ pip-wheel-metadata/
 .installed.cfg
 *.egg
 dist/
-*.manifest
 *.spec
 
 # --- Testing & Coverage ---
@@ -42,6 +41,9 @@ coverage.xml
 **/ios/Flutter/.last_build_id
 **/macos/Flutter/ephemeral/
 **/windows/flutter/ephemeral/
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugin_registrant.h
+**/windows/flutter/generated_plugins.cmake
 **/linux/flutter/ephemeral/
 
 # --- Android & Gradle ---

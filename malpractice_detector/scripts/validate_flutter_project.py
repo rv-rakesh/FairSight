@@ -34,11 +34,11 @@ def run_checks():
 
     checks = [
         # Android Platform Scaffolding
-        (FLUTTER_ROOT, "android/build.gradle", ["allprojects", "tasks.register(\"clean\""]),
-        (FLUTTER_ROOT, "android/settings.gradle", ["pluginManagement", "dev.flutter.flutter-plugin-loader", "include \":app\""]),
-        (FLUTTER_ROOT, "android/gradle.properties", ["android.useAndroidX=true"]),
-        (FLUTTER_ROOT, "android/gradle/wrapper/gradle-wrapper.properties", ["gradle-8.4-all.zip"]),
-        (FLUTTER_ROOT, "android/app/build.gradle", ["namespace \"org.fairsight.exam_proctor\"", "compileSdk 34", "minSdkVersion 21", "applicationId \"org.fairsight.exam_proctor\""]),
+        (FLUTTER_ROOT, "android/build.gradle", ["allprojects", "layout.buildDirectory", "tasks.register(\"clean\""]),
+        (FLUTTER_ROOT, "android/settings.gradle", ["pluginManagement", "dev.flutter.flutter-plugin-loader", "9.3.1", "2.4.20", "include \":app\""]),
+        (FLUTTER_ROOT, "android/gradle.properties", ["android.useAndroidX=true", "android.newDsl=false", "android.builtInKotlin=false"]),
+        (FLUTTER_ROOT, "android/gradle/wrapper/gradle-wrapper.properties", ["gradle-9.5.0-all.zip"]),
+        (FLUTTER_ROOT, "android/app/build.gradle", ["namespace \"org.fairsight.exam_proctor\"", "compileSdk flutter.compileSdkVersion", "minSdkVersion flutter.minSdkVersion", "applicationId \"org.fairsight.exam_proctor\""]),
         (FLUTTER_ROOT, "android/app/src/main/AndroidManifest.xml", ["package=\"org.fairsight.exam_proctor\"", "android:label=\"FairSight\""]),
         (FLUTTER_ROOT, "android/app/src/main/kotlin/org/fairsight/exam_proctor/MainActivity.kt", ["package org.fairsight.exam_proctor", "class MainActivity"]),
         (FLUTTER_ROOT, "android/app/src/main/res/values/styles.xml", ["LaunchTheme", "NormalTheme"]),
@@ -63,8 +63,8 @@ def run_checks():
         (FLUTTER_ROOT, "windows/runner/runner.exe.manifest", ["PerMonitorV2"]),
 
         # Dart Application Logic, Theme & Tests
-        (FLUTTER_ROOT, "pubspec.yaml", ["name: exam_proctor_app", "flutter:", "sdk: flutter"]),
-        (FLUTTER_ROOT, "lib/main.dart", ["title: 'FairSight'", "CardThemeData(", "fontFamilyFallback", "useMaterial3: true"]),
+        (FLUTTER_ROOT, "pubspec.yaml", ["name: exam_proctor_app", "material_ui:", "flutter:", "sdk: flutter"]),
+        (FLUTTER_ROOT, "lib/main.dart", ["package:material_ui/material_ui.dart", "title: 'FairSight'", "CardThemeData(", "fontFamilyFallback", "useMaterial3: true"]),
         (FLUTTER_ROOT, "lib/models/telemetry_model.dart", ["class TelemetryResult", "class ExamAuditReport", "normalizedScore", "normalizedRiskLevel"]),
         (FLUTTER_ROOT, "lib/services/api_service.dart", ["class ApiService", "defaultLocalhost", "defaultEmulator"]),
         (FLUTTER_ROOT, "test/telemetry_model_test.dart", ["Telemetry Model Unit Tests", "ExamAuditReport parses dual score"]),
@@ -72,7 +72,7 @@ def run_checks():
 
         # Root-Level Repository Hygiene & CI/CD Workflow
         (REPO_ROOT, ".gitignore", ["__pycache__/", "**/windows/flutter/ephemeral/"]),
-        (REPO_ROOT, ".github/workflows/build_apps.yml", ["flutter analyze", "flutter test", "flutter build apk --release", "flutter build windows --release", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
+        (REPO_ROOT, ".github/workflows/build_apps.yml", ["libegl1", "libgles2", "flutter-version: '3.50.0'", "flutter analyze", "flutter test", "flutter build apk --release", "flutter build windows --release", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
     ]
 
     passed = 0

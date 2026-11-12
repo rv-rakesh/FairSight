@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
@@ -39,16 +39,13 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
 
   Future<void> _pickFromFileStorage() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
-        allowMultiple: false,
-      );
+      final picked = await FilePicker.pickFile(type: FileType.video);
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
+      if (picked != null && picked.path != null) {
+        final file = File(picked.path!);
         setState(() {
           _selectedFile = file;
-          _fileName = result.files.single.name;
+          _fileName = picked.name;
           _fileSizeBytes = file.lengthSync();
           _statusText = "Video selected from Storage";
         });
@@ -218,7 +215,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -316,7 +313,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      shadowColor: const Color(0xFF2563EB).withOpacity(0.3),
+                      shadowColor: const Color(0xFF2563EB).withValues(alpha: 0.3),
                       elevation: _selectedFile != null ? 3 : 0,
                     ),
                     icon: const Icon(Icons.analytics_outlined, size: 20),

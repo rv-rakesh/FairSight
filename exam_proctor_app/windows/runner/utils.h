@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+void CreateAndAttachConsole();
+
 std::vector<std::string> GetCommandLineArguments();
 
 std::string Utf8FromUtf16(const wchar_t* utf16_string);

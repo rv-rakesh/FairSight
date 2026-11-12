@@ -36,7 +36,7 @@ def run_checks():
         # Android Platform Scaffolding
         (FLUTTER_ROOT, "android/build.gradle", ["allprojects", "layout.buildDirectory", "tasks.register(\"clean\""]),
         (FLUTTER_ROOT, "android/settings.gradle", ["pluginManagement", "dev.flutter.flutter-plugin-loader", "9.3.1", "2.4.20", "include \":app\""]),
-        (FLUTTER_ROOT, "android/gradle.properties", ["android.useAndroidX=true", "android.newDsl=false", "android.builtInKotlin=false"]),
+        (FLUTTER_ROOT, "android/gradle.properties", ["org.gradle.vfs.watch=false", "android.useAndroidX=true", "android.newDsl=false", "android.builtInKotlin=false"]),
         (FLUTTER_ROOT, "android/gradle/wrapper/gradle-wrapper.properties", ["gradle-9.5.0-all.zip"]),
         (FLUTTER_ROOT, "android/app/build.gradle", ["namespace \"org.fairsight.exam_proctor\"", "compileSdk flutter.compileSdkVersion", "minSdkVersion flutter.minSdkVersion", "applicationId \"org.fairsight.exam_proctor\""]),
         (FLUTTER_ROOT, "android/app/src/main/AndroidManifest.xml", ["package=\"org.fairsight.exam_proctor\"", "android:label=\"FairSight\""]),
@@ -55,8 +55,8 @@ def run_checks():
         (FLUTTER_ROOT, "windows/runner/flutter_window.cpp", ["generated_plugin_registrant.h", "RegisterPlugins", "SetChildContent", "SetNextFrameCallback"]),
         (FLUTTER_ROOT, "windows/runner/win32_window.h", ["class Win32Window", "SetChildContent", "bool Show()"]),
         (FLUTTER_ROOT, "windows/runner/win32_window.cpp", ["WindowClassRegistrar", "SetChildContent", "UpdateTheme"]),
-        (FLUTTER_ROOT, "windows/runner/utils.h", ["GetCommandLineArguments"]),
-        (FLUTTER_ROOT, "windows/runner/utils.cpp", ["Utf8FromUtf16"]),
+        (FLUTTER_ROOT, "windows/runner/utils.h", ["CreateAndAttachConsole", "GetCommandLineArguments"]),
+        (FLUTTER_ROOT, "windows/runner/utils.cpp", ["CreateAndAttachConsole", "Utf8FromUtf16"]),
         (FLUTTER_ROOT, "windows/runner/resource.h", ["IDI_APP_ICON"]),
         (FLUTTER_ROOT, "windows/runner/Runner.rc", ["FairSight.exe", "FairSight Organization", "app_icon.ico"]),
         (FLUTTER_ROOT, "windows/runner/resources/app_icon.ico", None),
@@ -72,7 +72,7 @@ def run_checks():
 
         # Root-Level Repository Hygiene & CI/CD Workflow
         (REPO_ROOT, ".gitignore", ["__pycache__/", "**/windows/flutter/ephemeral/"]),
-        (REPO_ROOT, ".github/workflows/build_apps.yml", ["libegl1", "libgles2", "flutter-version: '3.50.0'", "flutter analyze", "flutter test", "flutter build apk --release", "flutter build windows --release", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
+        (REPO_ROOT, ".github/workflows/build_apps.yml", ["libegl1", "libgles2", "java-version: '21'", "flutter config --jdk-dir", "flutter-version: '3.50.0'", "flutter analyze", "flutter test", "flutter build apk --release", "flutter build windows --release", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
     ]
 
     passed = 0

@@ -42,17 +42,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java 21
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.50.0'
+
+      - name: Configure Flutter JDK & Verify Java
+        run: |
+          flutter config --jdk-dir "$JAVA_HOME"
+          java -version
 
       - name: Get Flutter Dependencies
         working-directory: exam_proctor_app

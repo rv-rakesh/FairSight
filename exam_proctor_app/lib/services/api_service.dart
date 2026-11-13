@@ -118,7 +118,7 @@ class ApiService {
       debugPrint("uploadAndAnalyzeVideo error: $e");
       rethrow;
     }
-    return null;
+    
   }
 
   static Future<ExamAuditReport?> runScenario(String scenarioKey) async {

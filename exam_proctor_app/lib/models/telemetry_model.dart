@@ -97,6 +97,7 @@ class ExamViolationEvent {
   final double durationSec;
   final int weight;
   final String note;
+  final String? evidenceFrameB64;
 
   ExamViolationEvent({
     required this.type,
@@ -105,6 +106,7 @@ class ExamViolationEvent {
     required this.durationSec,
     required this.weight,
     required this.note,
+    this.evidenceFrameB64,
   });
 
   factory ExamViolationEvent.fromJson(Map<String, dynamic> json) {
@@ -115,6 +117,7 @@ class ExamViolationEvent {
       durationSec: (json['duration_sec'] as num?)?.toDouble() ?? 0.0,
       weight: json['weight'] ?? 0,
       note: json['note'] ?? '',
+      evidenceFrameB64: json['evidence_frame_b64'] as String?,
     );
   }
 }
@@ -129,6 +132,9 @@ class ExamAuditReport {
   final List<dynamic> windowAnalysis;
   final List<ExamViolationEvent> events;
   final List<dynamic> activityLog;
+  final int framesAnalysed;
+  final String candidateName;
+  final String examTitle;
 
   ExamAuditReport({
     required this.sessionId,
@@ -140,6 +146,9 @@ class ExamAuditReport {
     required this.windowAnalysis,
     required this.events,
     required this.activityLog,
+    this.framesAnalysed = 0,
+    this.candidateName = 'Examinee / Candidate',
+    this.examTitle = 'Standardized Online Examination',
   });
 
   factory ExamAuditReport.fromJson(Map<String, dynamic> json) {
@@ -159,6 +168,9 @@ class ExamAuditReport {
       windowAnalysis: json['window_analysis'] ?? [],
       events: evs,
       activityLog: json['activity_log'] ?? [],
+      framesAnalysed: (json['frames_analysed'] as num?)?.toInt() ?? 0,
+      candidateName: json['candidate_name'] ?? 'Examinee / Candidate',
+      examTitle: json['exam_title'] ?? 'Standardized Online Examination',
     );
   }
 }

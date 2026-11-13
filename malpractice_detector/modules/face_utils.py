@@ -11,13 +11,21 @@ Run `python download_model.py` once (with internet access) before first use.
 """
 
 import os
+import threading
 import urllib.request
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
+from scoring_config import (
+    FACE_LANDMARKER_MIN_CONFIDENCE,
+    BLAZE_FACE_MIN_CONFIDENCE,
+    OBJECT_DETECTOR_MIN_CONFIDENCE,
+    HAND_LANDMARKER_MIN_CONFIDENCE,
+)
 
-MODEL_DIR = "models"
+_PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_DIR = os.path.join(_PACKAGE_ROOT, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "face_landmarker.task")
 BLAZE_FACE_PATH = os.path.join(MODEL_DIR, "blaze_face_short_range.tflite")
 OBJECT_DETECTOR_PATH = os.path.join(MODEL_DIR, "efficientdet_lite0.tflite")
@@ -141,6 +149,17 @@ def _is_candidate_body_or_hand(b_box, score, cand_mesh, mesh_boxes, frame_h, fra
         return False
 
     # 3. ObjectDetector body proposals (headless proposals)
+    # Candidate's own lower torso / shoulders / foreground arms directly beneath chin:
+    # Wide horizontal box (aspect_ratio >= 1.40) spanning candidate center strictly below chin
+    # at low sub-proposal confidence (< 0.45) is part of the seated candidate's torso/arms.
+    if (
+        (bx1 <= cmx <= bx2)
+        and (by1 >= cy2 - 10)
+        and (aspect_ratio >= 1.40)
+        and (score < 0.45)
+    ):
+        return True
+
     # If the proposal is tall (bh >= frame_h * 0.45) and does NOT contain candidate face:
     # It is another person standing or moving in the room (e.g. standing to the side or reaching in)!
     if bh >= frame_h * 0.45:
@@ -187,8 +206,9 @@ class FaceMeshDetector:
     BlazeFace detector (periphery/corner/profile faces), and ObjectDetector (unauthorized persons/bodies).
     """
 
-    def __init__(self, model_path=MODEL_PATH, max_num_faces=10, min_detection_confidence=0.35):
+    def __init__(self, model_path=MODEL_PATH, max_num_faces=10, min_detection_confidence=FACE_LANDMARKER_MIN_CONFIDENCE):
         _ensure_models()
+        self._lock = threading.Lock()
         base_options = mp_python.BaseOptions(model_asset_path=model_path)
         self.options = mp_vision.FaceLandmarkerOptions(
             base_options=base_options,
@@ -205,7 +225,7 @@ class FaceMeshDetector:
             try:
                 fd_opts = mp_vision.FaceDetectorOptions(
                     base_options=mp_python.BaseOptions(model_asset_path=BLAZE_FACE_PATH),
-                    min_detection_confidence=0.55,
+                    min_detection_confidence=BLAZE_FACE_MIN_CONFIDENCE,
                 )
                 self.face_detector = mp_vision.FaceDetector.create_from_options(fd_opts)
             except Exception:
@@ -218,7 +238,7 @@ class FaceMeshDetector:
                 od_opts = mp_vision.ObjectDetectorOptions(
                     base_options=mp_python.BaseOptions(model_asset_path=OBJECT_DETECTOR_PATH),
                     category_allowlist=["person"],
-                    score_threshold=0.18,
+                    score_threshold=OBJECT_DETECTOR_MIN_CONFIDENCE,
                 )
                 self.obj_detector = mp_vision.ObjectDetector.create_from_options(od_opts)
             except Exception:
@@ -232,7 +252,7 @@ class FaceMeshDetector:
                     base_options=mp_python.BaseOptions(model_asset_path=HAND_LANDMARKER_PATH),
                     running_mode=mp_vision.RunningMode.IMAGE,
                     num_hands=4,
-                    min_hand_detection_confidence=0.35,
+                    min_hand_detection_confidence=HAND_LANDMARKER_MIN_CONFIDENCE,
                 )
                 self.hand_detector = mp_vision.HandLandmarker.create_from_options(hd_opts)
             except Exception:
@@ -263,30 +283,34 @@ class FaceMeshDetector:
             "frame_shape": (h, w)
           }
         """
+        if frame_bgr is None or frame_bgr.size == 0:
+            raise ValueError("Input frame is empty or invalid")
+
         h, w = frame_bgr.shape[:2]
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
 
-        if timestamp_ms is not None and timestamp_ms <= self._timestamp_ms:
-            self.reset()
-
-        if timestamp_ms is None:
-            self._timestamp_ms += 33
-            curr_ts = self._timestamp_ms
-        else:
-            self._timestamp_ms = timestamp_ms
-            curr_ts = timestamp_ms
-
-        try:
-            result = self.landmarker.detect_for_video(mp_image, curr_ts)
-        except ValueError as e:
-            if "monotonically increasing" in str(e):
+        with self._lock:
+            if timestamp_ms is not None and timestamp_ms <= self._timestamp_ms:
                 self.reset()
-                curr_ts = max(33, curr_ts)
-                self._timestamp_ms = curr_ts
-                result = self.landmarker.detect_for_video(mp_image, curr_ts)
+
+            if timestamp_ms is None:
+                self._timestamp_ms += 33
+                curr_ts = self._timestamp_ms
             else:
-                raise
+                self._timestamp_ms = int(timestamp_ms)
+                curr_ts = self._timestamp_ms
+
+            try:
+                result = self.landmarker.detect_for_video(mp_image, curr_ts)
+            except ValueError as e:
+                if "monotonically increasing" in str(e):
+                    self.reset()
+                    curr_ts = max(33, curr_ts)
+                    self._timestamp_ms = curr_ts
+                    result = self.landmarker.detect_for_video(mp_image, curr_ts)
+                else:
+                    raise
 
         landmarks_list = []
         mesh_boxes = []

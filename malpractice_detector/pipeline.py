@@ -11,6 +11,7 @@ This is the module the Streamlit app (app.py) will call into.
 """
 
 import sys
+import math
 import json
 import cv2
 
@@ -41,12 +42,20 @@ def process_video(video_path, sample_fps=SAMPLE_FPS, progress_callback=None, deb
         "debug_frames": [ ... ]  (only present if debug=True)
       }
     """
+    if sample_fps <= 0:
+        raise ValueError("sample_fps must be positive")
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError(f"Could not open video: {video_path}")
 
-    native_fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    raw_fps = cap.get(cv2.CAP_PROP_FPS)
+    if not raw_fps or not math.isfinite(raw_fps) or raw_fps <= 0 or raw_fps > 240:
+        native_fps = 30.0
+    else:
+        native_fps = float(raw_fps)
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     frame_interval = max(1, round(native_fps / sample_fps))
 
     detector = FaceMeshDetector(max_num_faces=3)
@@ -129,7 +138,32 @@ def process_video(video_path, sample_fps=SAMPLE_FPS, progress_callback=None, deb
 
     cap.release()
     detector.close()
+    if frames_analysed == 0:
+        raise ValueError("Video file contains no readable frames")
+
     scorer.finalize(last_timestamp)
+
+    # Extract representative real evidence frame thumbnail for each confirmed violation
+    if scorer.events:
+        try:
+            ev_cap = cv2.VideoCapture(video_path)
+            if ev_cap.isOpened():
+                for ev in scorer.events:
+                    target_sec = float(ev.get("start_sec", 0.0))
+                    ev_cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, target_sec * 1000.0))
+                    ret_ev, ev_frame = ev_cap.read()
+                    if ret_ev and ev_frame is not None and ev_frame.size > 0:
+                        h, w = ev_frame.shape[:2]
+                        target_w = 320
+                        target_h = max(1, int(h * (target_w / float(w))))
+                        thumb = cv2.resize(ev_frame, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                        ret_enc, buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                        if ret_enc:
+                            import base64
+                            ev["evidence_frame_b64"] = base64.b64encode(buf.tobytes()).decode("ascii")
+                ev_cap.release()
+        except Exception:
+            pass
 
     score = scorer.compute_risk_score()
     norm_res = scorer.compute_normalized_score(session_duration_sec=last_timestamp)
@@ -144,6 +178,7 @@ def process_video(video_path, sample_fps=SAMPLE_FPS, progress_callback=None, deb
         "activity_log": scorer.activity_log,
         "frames_analysed": frames_analysed,
         "video_duration_sec": round(last_timestamp, 2),
+        "duration_sec": round(last_timestamp, 2),
     }
     if debug:
         output["debug_frames"] = debug_frames

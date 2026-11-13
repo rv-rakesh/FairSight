@@ -349,6 +349,7 @@ def rescore_telemetry(debug_frames, config=None):
     config = config or {}
     yaw_thresh = config.get("yaw_threshold", YAW_THRESHOLD)
     pitch_thresh = config.get("pitch_down_threshold", PITCH_DOWN_THRESHOLD)
+    pitch_up_thresh = config.get("pitch_up_threshold", PITCH_UP_THRESHOLD)
     h_range = config.get("horizontal_center_range", HORIZONTAL_CENTER_RANGE)
     v_down = config.get("vertical_down_threshold", VERTICAL_DOWN_THRESHOLD)
     v_up = config.get("vertical_up_threshold", VERTICAL_UP_THRESHOLD)
@@ -410,7 +411,11 @@ def rescore_telemetry(debug_frames, config=None):
 
             # Head pose check
             if yaw is not None and pitch is not None:
-                conditions["head_turned"] = abs(yaw) > yaw_thresh or pitch > pitch_thresh
+                conditions["head_turned"] = (
+                    abs(yaw) > yaw_thresh
+                    or pitch > pitch_thresh
+                    or pitch < -pitch_up_thresh
+                )
                 if conditions["head_turned"]:
                     turn_dir = "right" if yaw < 0 else "left"
                     tilt_dir = "down" if pitch > 0 else "up"

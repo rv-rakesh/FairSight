@@ -105,6 +105,14 @@ class ApiService {
         return ExamAuditReport.fromJson(data);
       } else {
         debugPrint("uploadAndAnalyzeVideo server responded with: ${response.statusCode} - ${response.body}");
+        String errMsg = 'Server error (${response.statusCode})';
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic> && decoded['detail'] != null) {
+            errMsg = decoded['detail'].toString();
+          }
+        } catch (_) {}
+        throw Exception(errMsg);
       }
     } catch (e) {
       debugPrint("uploadAndAnalyzeVideo error: $e");

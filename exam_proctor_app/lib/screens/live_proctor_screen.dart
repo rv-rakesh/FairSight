@@ -29,6 +29,8 @@ class _LiveProctorScreenState extends State<LiveProctorScreen> {
   String _currentRiskLevel = "Low";
   TelemetryResult? _latestTelemetry;
   String? _activeWarning;
+  String? _initError;
+  bool _isInitializing = false;
 
   @override
   void initState() {
@@ -37,33 +39,134 @@ class _LiveProctorScreenState extends State<LiveProctorScreen> {
   }
 
   Future<void> _initLiveSession() async {
-    final sId = await ApiService.startSession();
-    if (!mounted) return;
+    if (_isInitializing) return;
+    _isInitializing = true;
+
+    // Clean up any previous timers and camera controller
+    _frameTimer?.cancel();
+    _sessionTimer?.cancel();
+    if (_cameraController != null) {
+      try {
+        await _cameraController!.dispose();
+      } catch (e) {
+        debugPrint("Error disposing previous camera: $e");
+      }
+      _cameraController = null;
+    }
+
+    if (mounted) {
+      setState(() {
+        _initError = null;
+        _isCameraReady = false;
+      });
+    }
+
+    // Step 1: Initialize session on backend with strict 8s timeout
+    String? sId;
+    try {
+      sId = await ApiService.startSession().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => null,
+      );
+    } catch (e) {
+      debugPrint("Backend session error: $e");
+      sId = null;
+    }
+
+    if (!mounted) {
+      _isInitializing = false;
+      return;
+    }
+
+    if (sId == null) {
+      setState(() {
+        _sessionId = null;
+        _isInitializing = false;
+        _initError = 'FastAPI backend unreachable at ${ApiService.baseUrl}.\n'
+            'Ensure the backend is running (run start_backend.bat) or verify Server Settings.';
+      });
+      return;
+    }
     setState(() => _sessionId = sId);
 
+    // Step 2: Enumerate available cameras with 8s timeout
     try {
-      _cameras = await availableCameras();
-      if (_cameras.isNotEmpty) {
-        CameraDescription selectedCam = _cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.front,
-          orElse: () => _cameras.first,
-        );
-
-        _cameraController = CameraController(
-          selectedCam,
-          ResolutionPreset.medium,
-          enableAudio: false,
-          imageFormatGroup: ImageFormatGroup.jpeg,
-        );
-
-        await _cameraController!.initialize();
-        if (mounted) {
-          setState(() => _isCameraReady = true);
-          _startProctoringLoops();
-        }
-      }
+      _cameras = await availableCameras().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => throw TimeoutException('Camera enumeration timed out after 8 seconds.'),
+      );
     } catch (e) {
-      debugPrint("Camera error: $e");
+      debugPrint("Camera enumeration error: $e");
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _initError = 'Camera detection failed: $e\n\n'
+              'Troubleshooting:\n'
+              '• Verify your webcam is plugged in and recognized by Windows.\n'
+              '• Check Windows Camera Privacy Settings (Settings > Privacy & security > Camera).\n'
+              '• Close any other apps using the camera (Zoom, Teams, Chrome).';
+        });
+      }
+      return;
+    }
+
+    if (!mounted) {
+      _isInitializing = false;
+      return;
+    }
+
+    if (_cameras.isEmpty) {
+      setState(() {
+        _isInitializing = false;
+        _initError = 'No camera device detected on this system.\n\n'
+            'Connect a webcam or use the "Upload & Audit Video" mode.';
+      });
+      return;
+    }
+
+    // Step 3: Initialize controller with 8s timeout
+    try {
+      final selectedCam = _cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => _cameras.first,
+      );
+
+      final controller = CameraController(
+        selectedCam,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.jpeg,
+      );
+
+      await controller.initialize().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => throw TimeoutException('Camera initialization timed out after 8 seconds.'),
+      );
+
+      if (!mounted) {
+        await controller.dispose();
+        _isInitializing = false;
+        return;
+      }
+
+      _cameraController = controller;
+      setState(() {
+        _isCameraReady = true;
+        _isInitializing = false;
+      });
+      _startProctoringLoops();
+    } catch (e) {
+      debugPrint("Camera initialize error: $e");
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _initError = 'Unable to initialize camera stream: $e\n\n'
+              'Troubleshooting:\n'
+              '• Another application (Zoom, Teams, Browser) may be locking the webcam.\n'
+              '• Check Windows Camera Privacy Settings (Settings > Privacy & security > Camera).\n'
+              '• Try unplugging and reconnecting your USB webcam.';
+        });
+      }
     }
   }
 
@@ -148,30 +251,30 @@ class _LiveProctorScreenState extends State<LiveProctorScreen> {
       ),
     );
 
+    ExamAuditReport? report;
     if (_sessionId != null) {
-      final report = await ApiService.finalizeSession(_sessionId!);
-      if (mounted) {
-        Navigator.pop(context);
-        if (report != null) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => ReportScreen(report: report)),
-          );
-          return;
-        }
-      }
+      report = await ApiService.finalizeSession(_sessionId!);
     }
 
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to finalize session. Verify FastAPI backend connection.'),
-          backgroundColor: Color(0xFFDC2626),
-        ),
+    if (!mounted) return;
+    Navigator.pop(context); // Dismiss progress dialog exactly once
+
+    if (report != null) {
+      final confirmedReport = report;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => ReportScreen(report: confirmedReport)),
       );
-      Navigator.pop(context);
+      return;
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Unable to finalize session. Verify FastAPI backend connection.'),
+        backgroundColor: Color(0xFFDC2626),
+      ),
+    );
+    Navigator.pop(context);
   }
 
   @override
@@ -240,19 +343,55 @@ class _LiveProctorScreenState extends State<LiveProctorScreen> {
                 borderRadius: BorderRadius.circular(20),
                 child: _isCameraReady && _cameraController != null
                     ? CameraPreview(_cameraController!)
-                    : Container(
-                        color: Colors.white,
-                        child: const Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(color: Color(0xFF2563EB)),
-                              SizedBox(height: 14),
-                              Text('Initializing camera stream...', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-                            ],
+                    : _initError != null
+                        ? Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.all(24),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 42),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _initError!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5, height: 1.4),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: () => Navigator.pop(context),
+                                        icon: const Icon(Icons.arrow_back, size: 16),
+                                        label: const Text('Dashboard'),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      ElevatedButton.icon(
+                                        onPressed: _initLiveSession,
+                                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                                        label: const Text('Retry Connection'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.white,
+                            child: const Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(color: Color(0xFF2563EB)),
+                                  SizedBox(height: 14),
+                                  Text('Initializing camera stream...', style: TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
               ),
             ),
           ),

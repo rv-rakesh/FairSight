@@ -65,13 +65,17 @@ def run_checks():
         # Dart Application Logic, Theme & Tests
         (FLUTTER_ROOT, "pubspec.yaml", ["name: exam_proctor_app", "material_ui:", "flutter:", "sdk: flutter"]),
         (FLUTTER_ROOT, "lib/main.dart", ["package:material_ui/material_ui.dart", "title: 'FairSight'", "CardThemeData(", "fontFamilyFallback", "useMaterial3: true"]),
-        (FLUTTER_ROOT, "lib/models/telemetry_model.dart", ["class TelemetryResult", "class ExamAuditReport", "normalizedScore", "normalizedRiskLevel"]),
+        (FLUTTER_ROOT, "lib/models/telemetry_model.dart", ["class TelemetryResult", "class ExamAuditReport", "normalizedScore", "normalizedRiskLevel", "framesAnalysed"]),
+        (FLUTTER_ROOT, "lib/screens/live_proctor_screen.dart", ["_initError", "Retry Connection"]),
+        (FLUTTER_ROOT, "lib/screens/report_screen.dart", ["10-Min Normalized Score", "Flagged Moments"]),
         (FLUTTER_ROOT, "lib/services/api_service.dart", ["class ApiService", "defaultLocalhost", "defaultEmulator"]),
-        (FLUTTER_ROOT, "test/telemetry_model_test.dart", ["Telemetry Model Unit Tests", "ExamAuditReport parses dual score"]),
+        (FLUTTER_ROOT, "test/telemetry_model_test.dart", ["Telemetry Model Unit Tests", "ExamAuditReport parses dual score", "frames_analysed"]),
         (FLUTTER_ROOT, "test/widget_test.dart", ["ExamProctorApp", "Exam Proctor AI"]),
 
-        # Root-Level Repository Hygiene & CI/CD Workflow
+        # Root-Level Repository Hygiene, Architecture Docs & CI/CD Workflow
         (REPO_ROOT, ".gitignore", ["__pycache__/", "**/windows/flutter/ephemeral/"]),
+        (REPO_ROOT, "docs/ARCHITECTURE_AND_DIAGRAMS.md", ["mermaid", "/api/analyze-video"]),
+        (REPO_ROOT, "malpractice_detector/start_backend.bat", ["uvicorn api:app --host 0.0.0.0 --port 8000"]),
         (REPO_ROOT, ".github/workflows/build_apps.yml", ["libegl1", "libgles2", "java-version: '21'", "flutter config --jdk-dir", "flutter-version: '3.50.0'", "flutter analyze", "flutter test", "flutter build apk --release", "flutter build windows --release", "FairSight-Android-APK", "FairSight-Windows-Desktop"]),
     ]
 

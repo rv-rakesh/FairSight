@@ -21,6 +21,7 @@ DERIVED from these numeric values using real thresholds (not hand-set).
 from scoring_config import (
     YAW_THRESHOLD,
     PITCH_DOWN_THRESHOLD,
+    PITCH_UP_THRESHOLD,
     HORIZONTAL_CENTER_RANGE,
     VERTICAL_DOWN_THRESHOLD,
     VERTICAL_UP_THRESHOLD,
@@ -32,6 +33,7 @@ STEP_SEC = DEMO_STEP_SEC  # matching scoring_config.py
 
 
 def derive_telemetry_conditions(frame, yaw_thresh=YAW_THRESHOLD, pitch_thresh=PITCH_DOWN_THRESHOLD,
+                                pitch_up_thresh=PITCH_UP_THRESHOLD,
                                 h_range=HORIZONTAL_CENTER_RANGE, v_down=VERTICAL_DOWN_THRESHOLD,
                                 v_up=VERTICAL_UP_THRESHOLD):
     """
@@ -67,7 +69,11 @@ def derive_telemetry_conditions(frame, yaw_thresh=YAW_THRESHOLD, pitch_thresh=PI
                 direction = "center"
 
         if yaw is not None and pitch is not None:
-            conditions["head_turned"] = abs(yaw) > yaw_thresh or pitch > pitch_thresh
+            conditions["head_turned"] = (
+                abs(yaw) > yaw_thresh
+                or pitch > pitch_thresh
+                or pitch < -pitch_up_thresh
+            )
             if conditions["head_turned"]:
                 turn_dir = "right" if yaw < 0 else "left"
                 tilt_dir = "down" if pitch > 0 else "up"

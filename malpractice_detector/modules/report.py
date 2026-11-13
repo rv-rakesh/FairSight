@@ -12,6 +12,7 @@ Two levels of detail, matching the two layers in scoring.py:
 """
 
 import os
+import html
 import pandas as pd
 from datetime import datetime
 
@@ -33,8 +34,8 @@ def build_summary_text(result, video_name="video"):
     lines.append("Cheating-Risk Analysis Report")
     lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"Source video: {video_name}")
-    lines.append(f"Video duration analysed: {format_timestamp(result['video_duration_sec'])}")
-    lines.append(f"Frames analysed: {result['frames_analysed']}")
+    lines.append(f"Video duration analysed: {format_timestamp(result.get('video_duration_sec', result.get('duration_sec', 0)))}")
+    lines.append(f"Frames analysed: {result.get('frames_analysed', 0)}")
     lines.append("")
     lines.append(f"RISK SCORE: {result['risk_score']} / 100  ({result['risk_level']})")
     lines.append("")
@@ -100,7 +101,7 @@ def save_report(result, video_name, output_dir="outputs"):
     events_csv_path = os.path.join(output_dir, f"{base}_events.csv")
     activity_csv_path = os.path.join(output_dir, f"{base}_activity_log.csv")
 
-    with open(txt_path, "w") as f:
+    with open(txt_path, "w", encoding="utf-8") as f:
         f.write(build_summary_text(result, video_name))
 
     build_events_dataframe(result).to_csv(events_csv_path, index=False)
@@ -127,11 +128,15 @@ def build_html_printable_report(result, session_meta=None):
         "source_name": "Recorded Session Video",
     }
     if session_meta:
-        meta.update(session_meta)
+        meta.update({k: html.escape(str(v)) for k, v in session_meta.items() if v is not None})
+    meta = {k: html.escape(str(v)) if not (session_meta and k in session_meta) else v for k, v in meta.items()}
 
-    score = result.get("risk_score", 0)
-    level = result.get("risk_level", "Low")
-    duration_str = format_timestamp(result.get("video_duration_sec", 0))
+    score = int(result.get("risk_score", 0))
+    level = html.escape(str(result.get("risk_level", "Low")))
+    norm_score = int(result.get("normalized_score", score))
+    norm_level = html.escape(str(result.get("normalized_risk_level", level)))
+    duration_sec = result.get("video_duration_sec", result.get("duration_sec", 0)) or 0
+    duration_str = format_timestamp(duration_sec)
     events = result.get("events", [])
     activity_log = result.get("activity_log", [])
 
@@ -155,37 +160,48 @@ def build_html_printable_report(result, session_meta=None):
     events_rows = []
     if events:
         for idx, e in enumerate(events, 1):
-            note = e.get("note", "sustained")
+            note = html.escape(str(e.get("note", "sustained")))
+            ev_type = html.escape(_pretty_type(str(e.get("type", "unknown"))))
+            start_s = float(e.get("start_sec", 0.0))
+            end_s = float(e.get("end_sec", 0.0))
+            dur_s = float(e.get("duration_sec", 0.0))
+            wt = int(e.get("weight", 0))
+            b64_img = e.get("evidence_frame_b64")
+            img_cell = f'<img src="data:image/jpeg;base64,{b64_img}" style="max-width:100px; max-height:65px; border-radius:4px; border:1px solid #CBD5E1;" alt="Evidence"/>' if b64_img else '<span style="color:#94A3B8; font-size:11px;">Telemetry Trace</span>'
             events_rows.append(f"""
             <tr>
                 <td style="text-align:center; font-weight:600;">{idx}</td>
-                <td style="font-weight:600; color:#1E2761;">{_pretty_type(e['type'])}</td>
-                <td style="font-family:monospace;">{format_timestamp(e['start_sec'])} – {format_timestamp(e['end_sec'])}</td>
-                <td style="text-align:right;">{e['duration_sec']:.1f}s</td>
-                <td style="text-align:right; font-weight:600; color:#C0392B;">+{e['weight']}</td>
+                <td style="font-weight:600; color:#1E2761;">{ev_type}</td>
+                <td style="font-family:monospace;">{format_timestamp(start_s)} – {format_timestamp(end_s)}</td>
+                <td style="text-align:right;">{dur_s:.1f}s</td>
+                <td style="text-align:right; font-weight:600; color:#C0392B;">+{wt}</td>
                 <td style="color:#555;">{note}</td>
+                <td style="text-align:center;">{img_cell}</td>
             </tr>
             """)
     else:
         events_rows.append("""
         <tr>
-            <td colspan="6" style="text-align:center; padding:18px; color:#1E8E5A; font-weight:500;">
+            <td colspan="7" style="text-align:center; padding:18px; color:#1E8E5A; font-weight:500;">
                 ✓ No sustained or repeated suspicious events recorded during this session.
             </td>
         </tr>
         """)
     events_html = "".join(events_rows)
 
-    # Build Activity Timeline Sample Rows (up to 20 for print brevity)
+    # Build Activity Timeline Sample Rows (up to 25 for print brevity)
     activity_rows = []
     if activity_log:
         sample_log = activity_log[:25]
         for a in sample_log:
+            act_time = format_timestamp(float(a.get("time_sec", 0.0)))
+            act_type = html.escape(_pretty_type(str(a.get("type", "unknown"))))
+            act_det = html.escape(str(a.get("detail", "-")))
             activity_rows.append(f"""
             <tr>
-                <td style="font-family:monospace; color:#028090;">{format_timestamp(a['time_sec'])}</td>
-                <td style="font-weight:600;">{_pretty_type(a['type'])}</td>
-                <td style="color:#444;">{a.get('detail', '-')}</td>
+                <td style="font-family:monospace; color:#028090;">{act_time}</td>
+                <td style="font-weight:600;">{act_type}</td>
+                <td style="color:#444;">{act_det}</td>
             </tr>
             """)
         if len(activity_log) > 25:
@@ -463,7 +479,8 @@ def build_html_printable_report(result, session_meta=None):
             </div>
             <div class="score-pill">
                 <div class="num">{score}</div>
-                <div class="lbl">Cheating-Risk ({level})</div>
+                <div class="lbl">Raw Risk ({level})</div>
+                <div class="lbl" style="margin-top:6px; color:#028090;">10m Norm: {norm_score} ({norm_level})</div>
             </div>
         </div>
 
@@ -496,6 +513,7 @@ def build_html_printable_report(result, session_meta=None):
                     <th style="text-align:right;">Duration</th>
                     <th style="text-align:right;">Weight</th>
                     <th>Algorithmic Trace / Detection Layer</th>
+                    <th style="text-align:center; width:110px;">Evidence Snapshot</th>
                 </tr>
             </thead>
             <tbody>

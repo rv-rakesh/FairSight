@@ -67,6 +67,7 @@ void main() {
         'activity_log': [
           {'time_sec': 10.0, 'type': 'gaze_away', 'detail': 'looking left'}
         ],
+        'frames_analysed': 240,
       };
 
       final report = ExamAuditReport.fromJson(json);
@@ -82,6 +83,7 @@ void main() {
       expect(report.events[0].type, 'gaze_away');
       expect(report.events[0].weight, 12);
       expect(report.activityLog.length, 1);
+      expect(report.framesAnalysed, 240);
     });
 
     test('ExamAuditReport falls back cleanly if normalized fields are absent', () {

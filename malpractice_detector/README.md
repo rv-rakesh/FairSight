@@ -1,140 +1,91 @@
-# FairSight — AI-Based Malpractice Detection System
+# FairSight Backend — AI Malpractice Detection Engine (`malpractice_detector/`)
 
-> **Evaluator-Assistance Proctoring Engine & Behavioral Integrity Platform**  
-> FairSight turns recorded exam videos or live candidate feeds into timestamped, explainable behavioral telemetry for human evaluators. It flags observable evidence; it never declares guilt.
-
----
-
-## 1. System Architecture
-
-FairSight consists of three integrated layers:
-
-1. **Python AI Detection Core & FastAPI Service** (`api.py`, `pipeline.py`, `modules/`):
-   - OpenCV frame extraction at 4 fps (250 ms temporal resolution).
-   - MediaPipe Tasks API FaceLandmarker (478 3D landmarks).
-   - Cascade auxiliary detectors: BlazeFace (profile/edge faces), ObjectDetector (unauthorized persons/bodies), and HandLandmarker (intruder reaching hands) with duplicate suppression.
-   - Head pose estimation via `solvePnP` (yaw, pitch, roll) with pitch wraparound correction and landmark symmetry confirmation.
-   - Geometric iris-ratio gaze classification (center, left, right, up, down) with head-turn decoupling to prevent double-penalization.
-   - 3-Layer explainable scoring engine (`RiskScorer`).
-
-2. **Cross-Platform Client** (`exam_proctor_app/`):
-   - Flutter application targeting **Android APK** and **Windows Desktop (.exe)**.
-   - Real-time live proctoring HUD, video file audit with staged progress, scenario simulations, and verifiable audit certificates.
-
-3. **Developer & Analytics Dashboard** (`app.py`):
-   - Streamlit wide-layout dashboard for scenario inspection, telemetry visualization (Plotly), and threshold sensitivity tuning.
+> **Evaluator-Assistance Proctoring Engine & FastAPI Backend**  
+> FairSight converts recorded exam videos or live candidate camera frames into timestamped, explainable behavioral telemetry (`0–100` raw and time-normalized risk scores) for human invigilators. It flags observable behavioral cues; it never renders an automated disciplinary verdict.
 
 ---
 
-## 2. Three-Layer Scoring Engine
+## 1. System Architecture & Technology Stack
 
-Every point in the 0–100 risk score traces to a named rule, calibrated threshold, and exact timestamp:
-
-| Layer | Rule | Gate / Window | Weight |
-|---|---|---|---|
-| **Layer 1: Sustained Events** | Condition holds continuously ≥ duration gate | `head_turned`: 0.4 s<br>`gaze_away`: 0.7 s<br>`no_face`: 1.0 s | `head_turned`: 15<br>`gaze_away`: 12<br>`no_face`: 6 |
-| **Layer 2: Frequency Patterns** | Repeated brief glances/turns too short for Layer 1 | ≥ 2 brief events within a rolling 10.0 s window | `frequent_gaze_away`: 18<br>`frequent_head_turned`: 18 |
-| **Layer 3: Immediate Flags** | High-severity cues flagged on any occurrence | 0.0 s (immediate, single frame) | `multiple_faces`: 30 |
-
-### Risk Bands
-- **Low**: 0 – 24 (normal natural behavior)
-- **Medium**: 25 – 59 (advisory for evaluator review)
-- **High**: 60 – 100 (escalation threshold for human invigilator investigation)
-
-All parameters are centrally governed by `scoring_config.py`.
-
----
-
-## 3. Data Retention & Privacy Policy
-
-- **No Raw Video Storage**: Uploaded video files sent to `/api/analyze-video` are processed in temporary storage and deleted immediately upon analysis completion.
-- **Explainability**: Video frames themselves are not stored; only timestamped event logs, measured angles, and telemetry ratios are output in the audit report.
-- **Human-in-the-Loop**: The risk score is an assistance index for human invigilators, not an autonomous verdict.
+1. **Computer Vision & AI Pipeline (`pipeline.py`, `modules/face_utils.py`)**:
+   - **OpenCV** video decoding & 4 FPS temporal sampling (`250 ms` resolution).
+   - **MediaPipe FaceLandmarker (478 landmarks)** for primary candidate facial geometry & iris tracking.
+   - **Multi-Stage Auxiliary Cascade** (`BlazeFace`, `EfficientDet-Lite0` person detector, and `HandLandmarker`) with IoU deduplication and candidate workspace filtering to detect secondary people and reaching limbs without flagging the candidate's own hands.
+   - **Head Pose (`modules/head_pose.py`)**: OpenCV `solvePnP` (`SOLVEPNP_SQPNP` with `ITERATIVE` fallback), Euler pitch unwrap, and 2D nasal-ocular symmetry guard (`YAW_THRESHOLD=26.0°`, `PITCH_DOWN_THRESHOLD=26.0°`, `PITCH_UP_THRESHOLD=20.0°`).
+   - **Eye Gaze (`modules/eye_tracking.py`)**: Normalized horizontal & vertical iris-ratio tracking (`HORIZONTAL_CENTER_RANGE=(0.35, 0.65)`, `VERTICAL_DOWN_THRESHOLD=0.65`, `VERTICAL_UP_THRESHOLD=0.22`), decoupled from head turns so a single head turn is never double-counted.
+2. **3-Layer Time-Normalized Scoring Engine (`modules/scoring.py`, `scoring_config.py`)**:
+   - **Layer 1 (Sustained Events):** `head_turned` >= `0.4s` (+15), `gaze_away` >= `0.7s` (+12), `no_face` >= `1.0s` (+6).
+   - **Layer 2 (Frequency Patterns):** >= `2` brief occurrences within a rolling `10.0s` window (`frequent_gaze_away`: +18, `frequent_head_turned`: +18).
+   - **Layer 3 (Immediate Flags):** `multiple_faces` flagged immediately (+30; optional gap-guarded consecutive-frame confirmation via `REQUIRE_CONSECUTIVE_FRAMES_MULTI_FACE`).
+   - **Time Normalization:** 10-minute windows (`W=600s`), per-type caps (`WINDOW_PER_TYPE_CAPS`), and cross-window persistence `alpha=0.10` prevent long 3-hour honest sessions from drifting into false High risk.
+3. **FastAPI REST Backend (`api.py`) & Report Engine (`modules/report.py`)**:
+   - Exposes 10 REST endpoints powering Windows Desktop (`FairSight.exe`), Android (`FairSight` APK), and external integrations.
+   - Generates `.txt`, `.csv`, and XSS-sanitized printable HTML/PDF audit certificates displaying both Raw and 10-Min Normalized scores.
 
 ---
 
-## 4. Quick Start
+## 2. API Endpoints (`api.py`)
 
-### Prerequisites
-- Python 3.10+ (tested on Python 3.11)
-- Bundled MediaPipe model files in `models/` (already included)
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/health` | Service health check, model asset presence, active session count |
+| `GET` | `/api/scenarios` | Lists pre-calibrated benchmark scenarios (`honest_candidate`, `screen_peeking`, etc.) |
+| `POST` | `/api/scenarios/{scenario_key}/run` | Runs a scenario timeline through `RiskScorer` (`404` if invalid key) |
+| `POST` | `/api/detect-frame` | Stateless telemetry on a base64-encoded image (`400` invalid image, `422` bad timestamp) |
+| `POST` | `/api/session/start` | Starts a stateful live proctoring session and returns `session_id` |
+| `POST` | `/api/session/{session_id}/frame` | Scores a live session frame at `timestamp_sec` (`404` unknown session, `422` negative time) |
+| `POST` | `/api/session/{session_id}/finalize` | Finalizes active session, closes open cues, returns full dual-score report (`404` if closed) |
+| `POST` | `/api/analyze-video` | Analyses uploaded `.mp4`/`.avi`/`.mov`/`.mkv`/`.webm` at 4 FPS (`400` empty/corrupt/unsupported, `413` >250 MB) |
+| `POST` | `/api/rescore` | Re-scores stored `debug_frames` in-memory with custom thresholds |
+| `POST` | `/api/report/html` | Renders an HTML-escaped printable Audit Certificate (compatible with both video and live session outputs) |
 
-### Installation
-```bash
+---
+
+## 3. Running & Testing Locally (Windows / Linux)
+
+### Install Dependencies (Isolated venv Recommended on Anaconda Hosts)
+```powershell
+cd malpractice_detector
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Running the FastAPI Backend
-```bash
-uvicorn api:app --host 0.0.0.0 --port 8000
+### Start FastAPI Server
+```powershell
+python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
-API documentation is available at `http://localhost:8000/docs`.
+Or double-click `start_backend.bat` on Windows to launch Uvicorn and print candidate LAN IPv4 addresses for mobile testing.
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health Check: `http://127.0.0.1:8000/health`
 
-### Running the Streamlit Dashboard (Developer Tool)
-```bash
+### CLI Video Analysis & Developer Streamlit UI
+```powershell
+python pipeline.py path/to/video.mp4 --debug
 streamlit run app.py
 ```
 
-### Command-Line Video Analysis
-```bash
-python pipeline.py path/to/video.mp4 --debug
+### Automated Test & Benchmark Commands
+```powershell
+python -B -m pytest tests/ -v -p no:cacheprovider
+python -B scripts/validate_flutter_project.py
+python -B scripts/run_wp2_evaluation.py
 ```
-
-### Running Automated Tests
-```bash
-python -m pytest tests/ -v
-```
-All unit tests, scenario simulations, time-normalisation checks, and the configuration baseline integrity suite are executed. Results are logged to `results/pytest_output.txt`.
-
-> **Test Suite Status**: 32 passed, 1 skipped (0 failed).  
-> **Environment Note on Skipped Test**: `tests/test_multi_person_detection.py::test_detector_initialization_and_keys` is skipped on Windows environments where **Smart App Control (SAC)** is active (`VerifiedAndReputablePolicyState: 1`). Windows SAC blocks loading unsigned native binaries (`libmediapipe.dll`) via `ctypes.CDLL()` (`[WinError 4551] An Application Control policy has blocked this file`). All multi-person bounding-box heuristics, auxiliary annotation rendering, and hand suppression tests run and pass cleanly.
 
 ---
 
-## 5. Work Package Tracking & Roadmap
+## 4. Troubleshooting
 
-| Work Package | Focus Area | Status | Scope & Deliverables |
-|---|---|:---:|---|
-| **WP0** | Baseline & Hygiene | **COMPLETED** | Single configuration (`scoring_config.py`), fixed imports, cleaned root assets, baseline test guards (C-009). |
-| **WP1** | Scoring Improvements & Time Normalisation | **COMPLETED** | 10-minute windowed capped model ($W=600\text{s}$, $\alpha=0.10$), multi-face gap integrity guard ($1.5\times$ tolerance), calibration of scenarios, 32 unit tests passing (C-010, C-011). |
-| **WP4** | Buildable Cross-Platform App | **COMPLETED** | Full Android Gradle & Windows C++ runner scaffolding, rebranded to `org.fairsight.exam_proctor`, Material 3 theme modernized, CI release pipeline for APK & Windows ZIP (C-012). |
-| **WP2** | Evaluation Package | **NEXT RECOMMENDED** | Dataset description, ground-truth labels CSV, `evaluate.py`, `ablation.py`, `benchmark.py`, Wilson 95% intervals, Cohen's kappa. |
-| **WP3** | Backend Hardening | Queued | API-key authentication, configurable CORS, upload limits, automatic temp video file deletion, `/version` endpoint. |
-| **WP5** | App UI & UX Redesign | Queued | Professional proctor HUD, dual risk score display, audit certificate viewer. |
-| **WP6** | App Identity & Packaging | Queued | Branding, app icons, installer generation. |
-| **WP7** | Technical Documentation | Queued | Updating specification, literature verification, removing overclaims. |
-| **WP8** | Final Presentation | Queued | Defense slide deck aligned with actual code and evaluation benchmarks. |
-| **WP9** | Viva Readiness Pack | Queued | 15 examiner Q&A answers with real numbers, demo scripts, fallback contingency plans. |
+- **`numpy` / `opencv` / `contourpy` binary warning in global Anaconda**: Use a clean `venv` (`python -m venv venv`) with `numpy==1.26.4` (or compatible compiled wheels) without downgrading global Anaconda packages.
+- **Physical Android phone cannot reach `http://<PC-IP>:8000`**:
+  1. Ensure `uvicorn` was launched with `--host 0.0.0.0` (not `127.0.0.1`).
+  2. Allow inbound TCP Port `8000` in Windows Defender Firewall (`Private` profile).
+  3. Confirm phone and PC are on the same Wi-Fi subnet without AP client isolation.
+- **`[WinError 4551]` Smart App Control on `libmediapipe.dll`**: Some hardened Windows machines block unsigned native wheels; run pytest inside CI Linux or disable Smart App Control if evaluating MediaPipe locally.
 
 ---
 
-## 6. Directory Structure
+## 5. Privacy & Data Retention
 
-```
-malpractice_detector/
-├── scoring_config.py          # Single source of truth for all parameters
-├── api.py                     # FastAPI backend (10 endpoints)
-├── app.py                     # Streamlit dashboard
-├── pipeline.py                # End-to-end video pipeline
-├── demo_data.py               # 5 benchmark scenario timelines
-├── requirements.txt           # Python dependencies
-├── Dockerfile                 # Container specification
-├── docker-compose.yml         # Compose configuration
-├── models/                    # MediaPipe & TFLite model tasks
-├── modules/
-│   ├── face_utils.py          # Face mesh & cascade detection
-│   ├── eye_tracking.py        # Iris-ratio gaze direction
-│   ├── head_pose.py           # solvePnP pose estimation
-│   ├── scoring.py             # 3-layer RiskScorer & rescore engine
-│   ├── report.py              # Audit report & certificate builders
-│   └── visualizations.py      # Plotly visualizers
-├── tests/
-│   ├── test_config.py         # WP0 baseline integrity guard
-│   ├── test_scoring.py        # Scoring layer tests
-│   ├── test_scenarios.py      # Scenario simulation tests
-│   └── test_multi_person_detection.py  # Cascade detector tests
-├── docs/
-│   └── images/                # Reference test frames
-└── results/
-    └── pytest_output.txt      # Verified test execution log
-```
+- Uploaded videos in `/api/analyze-video` are written to a temporary file only during inference and deleted immediately in a `finally` block.
+- Outputs contain timestamped telemetry (`yaw`, `pitch`, gaze ratios, event logs) rather than storing raw candidate video recordings.

@@ -83,15 +83,18 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              ApiService.setBaseUrl(controller.text);
+              final nextUrl = controller.text;
               Navigator.pop(ctx);
+              if (nextUrl.trim().isNotEmpty) {
+                ApiService.setBaseUrl(nextUrl);
+              }
               _checkServer();
             },
             child: const Text('Connect'),
           ),
         ],
       ),
-    );
+    ).whenComplete(controller.dispose);
   }
 
   @override

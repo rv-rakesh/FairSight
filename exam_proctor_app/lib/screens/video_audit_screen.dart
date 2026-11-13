@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,6 +21,10 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
   String _statusText = "Ready to analyze";
   final ImagePicker _imagePicker = ImagePicker();
 
+  // Selected video preview / player state
+  bool _isPlayingPreview = false;
+  double _previewProgress = 0.0; // 0.0 to 1.0
+
   Future<void> _pickFromGallery() async {
     try {
       final XFile? video = await _imagePicker.pickVideo(source: ImageSource.gallery);
@@ -30,6 +35,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
           _fileName = video.name;
           _fileSizeBytes = file.lengthSync();
           _statusText = "Video selected from Gallery";
+          _previewProgress = 0.0;
         });
       }
     } catch (e) {
@@ -48,6 +54,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
           _fileName = picked.name;
           _fileSizeBytes = file.lengthSync();
           _statusText = "Video selected from Storage";
+          _previewProgress = 0.0;
         });
       }
     } catch (e) {
@@ -68,6 +75,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
           _fileName = video.name;
           _fileSizeBytes = file.lengthSync();
           _statusText = "Recorded exam video";
+          _previewProgress = 0.0;
         });
       }
     } catch (e) {
@@ -76,6 +84,17 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
   }
 
   void _showPickerOptions() {
+    final bool isDesktop = defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    // On Windows desktop, bypass phone camera and open native file dialog directly
+    if (isDesktop) {
+      _pickFromFileStorage();
+      return;
+    }
+
+    // On Mobile (Android / iOS): show appropriate source options
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -119,7 +138,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                   child: const Icon(Icons.folder_open_outlined, color: Color(0xFF059669), size: 20),
                 ),
                 title: const Text('Files & Downloads', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                subtitle: const Text('Choose .mp4 or .webm from storage', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                subtitle: const Text('Choose .mp4, .webm or .mkv from storage', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickFromFileStorage();
@@ -161,7 +180,13 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
         if (report != null) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => ReportScreen(report: report)),
+            MaterialPageRoute(
+              builder: (_) => ReportScreen(
+                report: report,
+                videoFile: _selectedFile,
+                videoPath: _selectedFile?.path,
+              ),
+            ),
           );
         } else {
           _showError("Analysis failed. Verify your connection to the AI backend.");
@@ -186,8 +211,19 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
     );
   }
 
+  String _formatFileSize(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool isDesktop = defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -197,7 +233,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
+            constraints: const BoxConstraints(maxWidth: 540),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -205,7 +241,7 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                 GestureDetector(
                   onTap: _isAnalyzing ? null : _showPickerOptions,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                    padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
@@ -237,9 +273,9 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                             color: _selectedFile != null ? const Color(0xFF2563EB) : const Color(0xFF64748B),
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 16),
                         Text(
-                          _selectedFile != null ? _fileName! : 'Select Exam Video Recording',
+                          _selectedFile != null ? _fileName! : (isDesktop ? 'Choose Video File from Computer' : 'Select Exam Video Recording'),
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
@@ -251,27 +287,174 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
                         const SizedBox(height: 6),
                         Text(
                           _selectedFile != null
-                              ? '${(_fileSizeBytes / (1024 * 1024)).toStringAsFixed(2)} MB • Ready for Forensic Audit'
-                              : 'Tap to choose from Gallery, Files, or Camera',
+                              ? '${_formatFileSize(_fileSizeBytes)} • Ready for Forensic Audit'
+                              : (isDesktop ? 'Click to open file browser (.mp4, .webm, .mkv, .avi)' : 'Tap to choose from Gallery, Files, or Camera'),
                           style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 20),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF0F172A),
-                            side: const BorderSide(color: Color(0xFFCBD5E1)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          ),
-                          onPressed: _isAnalyzing ? null : _showPickerOptions,
-                          icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-                          label: Text(_selectedFile != null ? 'Change Video' : 'Browse Videos', style: const TextStyle(fontSize: 13)),
+                        const SizedBox(height: 18),
+                        Wrap(
+                          spacing: 10,
+                          children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0F172A),
+                                side: const BorderSide(color: Color(0xFFCBD5E1)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              ),
+                              onPressed: _isAnalyzing ? null : _showPickerOptions,
+                              icon: Icon(_selectedFile != null ? Icons.folder_open : Icons.add_photo_alternate_outlined, size: 16),
+                              label: Text(_selectedFile != null ? 'Change Video' : (isDesktop ? 'Browse File System' : 'Browse Videos'), style: const TextStyle(fontSize: 13)),
+                            ),
+                            if (_selectedFile != null)
+                              TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFFDC2626),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                ),
+                                onPressed: _isAnalyzing
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _selectedFile = null;
+                                          _fileName = null;
+                                          _fileSizeBytes = 0;
+                                          _statusText = "Ready to analyze";
+                                        });
+                                      },
+                                icon: const Icon(Icons.close, size: 16),
+                                label: const Text('Clear', style: TextStyle(fontSize: 13)),
+                              ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 ),
+
+                // Selected Video Inspector & Playback Preview Card
+                if (_selectedFile != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.015), blurRadius: 6, offset: const Offset(0, 2)),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.play_circle_outline, color: Color(0xFF2563EB), size: 20),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Selected Video Preview & Inspector',
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: Color(0xFF0F172A)),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                _fileName != null ? _fileName!.split('.').last.toUpperCase() : 'MP4',
+                                style: const TextStyle(color: Color(0xFF2563EB), fontSize: 10.5, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // Interactive Video Player / Scrubber Preview Bar
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: Icon(
+                                      _isPlayingPreview ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _isPlayingPreview = !_isPlayingPreview;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                        trackHeight: 3,
+                                        activeTrackColor: const Color(0xFF38BDF8),
+                                        inactiveTrackColor: const Color(0xFF334155),
+                                        thumbColor: Colors.white,
+                                      ),
+                                      child: Slider(
+                                        value: _previewProgress,
+                                        min: 0.0,
+                                        max: 1.0,
+                                        onChanged: (v) {
+                                          setState(() => _previewProgress = v);
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(Icons.replay, color: Color(0xFF94A3B8), size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _previewProgress = 0.0;
+                                        _isPlayingPreview = false;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Position: ${(_previewProgress * 100).toInt()}%',
+                                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                    ),
+                                    Text(
+                                      'Path: ${_selectedFile!.path.length > 32 ? "...${_selectedFile!.path.substring(_selectedFile!.path.length - 30)}" : _selectedFile!.path}',
+                                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 10.5),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 24),
 
@@ -355,4 +538,6 @@ class _VideoAuditScreenState extends State<VideoAuditScreen> {
       ),
     );
   }
+}
+
 }

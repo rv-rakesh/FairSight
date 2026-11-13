@@ -18,6 +18,7 @@ Endpoints:
 """
 
 import os
+import math
 import uuid
 import time
 import base64
@@ -25,10 +26,10 @@ import tempfile
 from typing import Dict, Any, List, Optional
 import cv2
 import numpy as np
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
 
 from demo_data import SCENARIOS, run_scenario_session
 from modules.scoring import RiskScorer, rescore_telemetry
@@ -48,10 +49,13 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".wmv"}
+MAX_VIDEO_UPLOAD_BYTES = 250 * 1024 * 1024  # 250 MB safety cap
 
 # Persistent singleton detector for instant inference (<15ms)
 _detector: Optional[FaceMeshDetector] = None
@@ -61,6 +65,15 @@ def get_detector() -> FaceMeshDetector:
     if _detector is None:
         _detector = FaceMeshDetector(max_num_faces=4)
     return _detector
+
+def close_detector():
+    global _detector
+    if _detector is not None:
+        try:
+            _detector.close()
+        except Exception:
+            pass
+        _detector = None
 
 # In-memory store for live proctoring sessions
 _active_sessions: Dict[str, Dict[str, Any]] = {}
@@ -104,8 +117,8 @@ def execute_scenario(scenario_key: str):
 
 
 class DetectFramePayload(BaseModel):
-    image_base64: str
-    timestamp_ms: Optional[int] = None
+    image_base64: str = Field(..., min_length=1)
+    timestamp_ms: Optional[int] = Field(default=None, ge=0)
 
 
 @app.post("/api/detect-frame")
@@ -115,13 +128,17 @@ def detect_single_frame(payload: DetectFramePayload):
     Returns real-time facial telemetry, eye gaze, head pose, and detected intruder limbs.
     """
     try:
-        raw_b64 = payload.image_base64
+        raw_b64 = payload.image_base64.strip()
+        if not raw_b64:
+            raise ValueError("Empty base64 image string")
         if "," in raw_b64:
             raw_b64 = raw_b64.split(",", 1)[1]
-        img_bytes = base64.b64decode(raw_b64)
+        img_bytes = base64.b64decode(raw_b64, validate=True)
+        if not img_bytes:
+            raise ValueError("Decoded image payload is empty")
         np_arr = np.frombuffer(img_bytes, np.uint8)
         frame_bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        if frame_bgr is None:
+        if frame_bgr is None or frame_bgr.size == 0:
             raise ValueError("Failed to decode image from base64")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image data: {str(e)}")
@@ -190,8 +207,8 @@ def start_session():
 
 
 class SessionFramePayload(BaseModel):
-    image_base64: str
-    timestamp_sec: float
+    image_base64: str = Field(..., min_length=1)
+    timestamp_sec: float = Field(..., ge=0.0)
 
 
 @app.post("/api/session/{session_id}/frame")
@@ -200,6 +217,8 @@ def ingest_session_frame(session_id: str, payload: SessionFramePayload):
     session = _active_sessions.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found or expired")
+    if not math.isfinite(payload.timestamp_sec):
+        raise HTTPException(status_code=400, detail="timestamp_sec must be finite")
 
     # Reuse detect logic
     det_out = detect_single_frame(DetectFramePayload(
@@ -249,16 +268,34 @@ def finalize_session(session_id: str):
 
 
 @app.post("/api/analyze-video")
-async def analyze_video_file(file: UploadFile = File(...)):
-    """Processes an uploaded exam video file (.mp4, .webm, .avi) using the full 250ms pipeline."""
-    suffix = os.path.splitext(file.filename)[1] or ".mp4"
+def analyze_video_file(file: UploadFile = File(...)):
+    """Processes an uploaded exam video file (.mp4, .avi, .mov, .mkv, .webm) using the 4 FPS pipeline."""
+    filename = file.filename or "upload.mp4"
+    suffix = os.path.splitext(filename)[1].lower() or ".mp4"
+    if suffix not in ALLOWED_VIDEO_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported video format '{suffix}'. Allowed formats: {', '.join(sorted(ALLOWED_VIDEO_EXTENSIONS))}",
+        )
+
+    file.file.seek(0)
+    content = file.file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded video file is empty.")
+    if len(content) > MAX_VIDEO_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Uploaded video exceeds maximum allowed size ({MAX_VIDEO_UPLOAD_BYTES // (1024 * 1024)} MB).",
+        )
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
     try:
         result = process_video(tmp_path, debug=True)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid or unreadable video file: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Video analysis failed: {str(e)}")
     finally:
@@ -278,8 +315,10 @@ class RescorePayload(BaseModel):
 
 @app.post("/api/rescore")
 def rescore_session(payload: RescorePayload):
-    rescored = rescore_telemetry(payload.debug_frames, config=payload.config)
-    return rescored
+    try:
+        return rescore_telemetry(payload.debug_frames, config=payload.config)
+    except (ValueError, TypeError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid rescore payload: {str(e)}")
 
 
 class ReportPayload(BaseModel):
@@ -289,5 +328,7 @@ class ReportPayload(BaseModel):
 
 @app.post("/api/report/html", response_class=HTMLResponse)
 def generate_html_report(payload: ReportPayload):
-    html = build_html_printable_report(payload.result, session_meta=payload.session_meta)
-    return html
+    try:
+        return build_html_printable_report(payload.result, session_meta=payload.session_meta)
+    except (ValueError, TypeError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid report payload: {str(e)}")

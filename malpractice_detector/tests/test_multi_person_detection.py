@@ -3,10 +3,11 @@ import numpy as np
 import cv2
 import pytest
 from modules.face_utils import FaceMeshDetector, draw_face_annotations
+import api
 
 def test_detector_initialization_and_keys():
     try:
-        detector = FaceMeshDetector()
+        detector = api.get_detector()
     except OSError as e:
         if "4551" in str(e) or "Application Control" in str(e):
             pytest.skip(f"Windows Smart App Control blocked libmediapipe.dll: {e}")
@@ -23,7 +24,6 @@ def test_detector_initialization_and_keys():
     assert res['person_count'] == 0
     assert len(res['landmarks_list']) == 0
     assert len(res['auxiliary_persons']) == 0
-    detector.close()
 
 def test_draw_annotations_with_auxiliary_persons():
     h, w = 300, 400
@@ -49,11 +49,10 @@ def test_multi_person_on_test_frame_if_available():
     for path in test_paths:
         if os.path.exists(path):
             img = cv2.imread(path)
-            detector = FaceMeshDetector()
+            detector = api.get_detector()
             res = detector.process(img)
             assert res['person_count'] >= 2
             assert res['face_count'] >= 2
-            detector.close()
             break
 
 def test_duplicate_mesh_face_suppression_on_single_candidate():
@@ -66,12 +65,10 @@ def test_duplicate_mesh_face_suppression_on_single_candidate():
         ret, frame = cap.read()
         cap.release()
         if ret:
-            detector = FaceMeshDetector()
+            detector = api.get_detector()
             res = detector.process(frame, timestamp_ms=39000)
-            detector.close()
             assert res['mesh_face_count'] == 1, f"Expected 1 mesh face at 39s, got {res['mesh_face_count']}"
             assert res['face_count'] == 1, f"Expected 1 total person at 39s, got {res['face_count']}"
-
 
 def test_candidate_hand_and_chest_proposal_suppression():
     """Verifies that candidate hands/arms/chest are not flagged as auxiliary unauthorized persons."""
@@ -92,7 +89,6 @@ def test_candidate_hand_and_chest_proposal_suppression():
     behind_face = (130, 0, 175, 25)
     assert _is_candidate_body_or_hand(behind_face, 0.85, cand_mesh, mesh_boxes, frame_h, frame_w, is_face_proposal=True) is False
 
-
 def test_intruder_hand_vs_self_hand():
     """Verifies that an intruder reaching hand is flagged as multi-person, while self hand is not."""
     test_video = os.path.join(os.environ.get("TEMP", ""), "tmphya0mdab.mp4")
@@ -109,7 +105,7 @@ def test_intruder_hand_vs_self_hand():
         ret_self, frame_self = cap.read()
         cap.release()
 
-        detector = FaceMeshDetector()
+        detector = api.get_detector()
         if ret_self:
             res_self = detector.process(frame_self, timestamp_ms=5800)
             assert res_self['face_count'] == 1, f"Expected 1 person during self hand, got {res_self['face_count']}"
@@ -117,7 +113,3 @@ def test_intruder_hand_vs_self_hand():
         if ret_intruder:
             res_intruder = detector.process(frame_intruder, timestamp_ms=23700)
             assert res_intruder['face_count'] >= 2, f"Expected >=2 persons during intruder hand, got {res_intruder['face_count']}"
-        detector.close()
-
-
-
